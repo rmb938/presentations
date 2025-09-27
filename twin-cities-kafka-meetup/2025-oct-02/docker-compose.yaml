@@ -1,6 +1,7 @@
 services:
   warpstream-agent-kafka:
     image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
+    restart: unless-stopped
     command:
       - agent
     env_file: .env/warpstream-agent-kafka
@@ -8,6 +9,7 @@ services:
       - gcp_service_account_key
   bento-historical:
     image: ghcr.io/warpstreamlabs/bento
+    restart: unless-stopped
     command:
       - --log.level
       - debug
@@ -16,6 +18,7 @@ services:
       - bento-historical-file-cache-timestamp_offset:/cache/timestamp_offset
   bento-realtime:
     image: ghcr.io/warpstreamlabs/bento
+    restart: unless-stopped
     command:
       - --log.level
       # Trace because this one does way less stuff so we want to make sure it's
@@ -23,9 +26,9 @@ services:
       - trace
     volumes:
       - ./bento-realtime.yaml:/bento.yaml
-
   warpstream-agent-tableflow:
     image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
+    restart: unless-stopped
     command:
       - agent
     env_file: .env/warpstream-agent-tableflow
