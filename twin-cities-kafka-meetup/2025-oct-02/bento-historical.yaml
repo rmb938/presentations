@@ -1,0 +1,139 @@
+input:
+  generate:
+    interval: 1s # Max 1s so API devs don't get mad
+    batch_size: 1
+    auto_replay_nacks: true
+    # Set the timestamp in the message, starting at 1615190400 (Monday, March 8, 2021 8:00:00 AM GMT) and add 300 seconds each time
+    count: 477307 # Maximum this many 5 min intervals since 1615190400, as of Sept 20th 2025
+    mapping: |
+      root = {}
+
+pipeline:
+  processors:
+    # Load the current timestamp offset from cache
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          # Try to pull mapping from cache
+          - cache:
+              resource: timestamp_offset
+              key: timestamp_offset
+              operator: get
+          # Otherwise store it in the cache
+          - catch:
+              - mapping: |
+                  root = {}
+                  root.timestamp_offset = 0
+          - mapping: |
+              root = this
+              root.timestamp_offset = this.timestamp_offset + 300
+          - cache:
+              resource: timestamp_offset
+              key: timestamp_offset
+              operator: set
+              ttl: 1h
+              value: "${! content() }"
+
+        result_map: |
+          root.timestamp = 1615190400 + this.timestamp_offset
+
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          # Try to pull mapping from cache
+          - cache:
+              resource: mapping_cache
+              key: osrs_item_mapping
+              operator: get
+          # Otherwise store it in the cache
+          - catch:
+              - http:
+                  url: https://prices.runescape.wiki/api/v1/osrs/mapping
+                  verb: GET
+                  retries: 100
+                  headers:
+                    # Custom User agent with discord username as recommended by API devs
+                    User-Agent: WarpStream - Bento - @rmb938 in Discord
+              - mapping: |
+                  root = this.map_each(item -> {
+                    (item.id.string()): item
+                  }).squash()
+              - cache:
+                  resource: mapping_cache
+                  key: osrs_item_mapping
+                  operator: set
+                  ttl: 1h
+                  value: "${! content() }"
+        result_map: |
+          root.item_mapping = this
+
+    # Make the http call on 5m endpoint, using branch so we don't overwrite root and clear the root.item_mapping
+    - branch:
+        processors:
+          - http:
+              url: https://prices.runescape.wiki/api/v1/osrs/5m?timestamp=${! this.timestamp }
+              verb: GET
+              retries: 100
+              headers:
+                # Custom User agent with discord username as recommended by API devs
+                User-Agent: WarpStream - Bento - @rmb938 in Discord
+              parallel: false
+        result_map: |
+          root.data = this.data
+
+    # Copy the timestamp into all the data items
+    - mapping: |
+        root.data = this.data.map_each(item -> item.value.merge({"item_id": item.key.number(), "timestamp": this.timestamp, "name": this.item_mapping.get(item.key).name, "icon": this.item_mapping.get(item.key).icon}))
+
+    # Move all the data items into the root
+    - mapping: |
+        root = this.data
+
+    # Split the dict into their own messages
+    - unarchive:
+        format: json_map
+
+    # Remove avgHighPrice and highPriceVolume if volume is 0
+    # This means there was no insta buy during this time period
+    - mapping: |
+        root = this
+        root.avgHighPrice = if this.highPriceVolume == 0 { deleted() } else { this.avgHighPrice }
+        root.highPriceVolume = if this.highPriceVolume == 0 { deleted() } else { this.highPriceVolume }
+
+    # Remove avgLowPrice and lowPriceVolume if volume is 0
+    # This means there was no insta sell during this time period
+    - mapping: |
+        root = this
+        root.avgLowPrice = if this.lowPriceVolume == 0 { deleted() } else { this.avgLowPrice }
+        root.lowPriceVolume = if this.lowPriceVolume == 0 { deleted() } else { this.lowPriceVolume }
+
+    # Convert unix time to timestamp
+    - mapping: |
+        root = this
+        root.timestamp = this.timestamp.ts_format("2006-01-02T15:04:05Z07:00", "UTC")
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - kafka_franz:
+          seed_brokers:
+            - warpstream-agent-kafka:9092
+          topic: osrs_prices_5m
+          key: ${! this.item_id }
+          partitioner: murmur2_hash
+          compression: zstd
+
+          # Recommended WarpStream config
+          metadata_max_age: 60s
+          max_buffered_records: 1000000
+          max_message_bytes: 16000000
+      - stdout:
+          codec: lines
+
+cache_resources:
+  - label: mapping_cache
+    memory: {}
+  - label: timestamp_offset
+    file:
+      directory: /cache/timestamp_offset

@@ -1,0 +1,37 @@
+services:
+  warpstream-agent-kafka:
+    image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
+    command:
+      - agent
+    env_file: .env/warpstream-agent-kafka
+    secrets:
+      - gcp_service_account_key
+  bento-historical:
+    image: ghcr.io/warpstreamlabs/bento
+    command:
+      - --log.level
+      - debug
+    volumes:
+      - ./bento-historical.yaml:/bento.yaml
+      - bento-historical-file-cache-timestamp_offset:/cache/timestamp_offset
+  bento-realtime:
+    image: ghcr.io/warpstreamlabs/bento
+    command:
+      - --log.level
+      # Trace because this one does way less stuff so we want to make sure it's
+      # still working
+      - trace
+    volumes:
+      - ./bento-realtime.yaml:/bento.yaml
+
+  # warpstream-agent-tableflow:
+  #   image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
+  #   command:
+  #     - agent
+
+secrets:
+  gcp_service_account_key:
+    file: .secrets/rmb-lab-75a2716621b6.json
+
+volumes:
+  bento-historical-file-cache-timestamp_offset: {}
