@@ -24,10 +24,13 @@ services:
     volumes:
       - ./bento-realtime.yaml:/bento.yaml
 
-  # warpstream-agent-tableflow:
-  #   image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
-  #   command:
-  #     - agent
+  warpstream-agent-tableflow:
+    image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
+    command:
+      - agent
+    env_file: .env/warpstream-agent-tableflow
+    secrets:
+      - gcp_service_account_key
 
 secrets:
   gcp_service_account_key:

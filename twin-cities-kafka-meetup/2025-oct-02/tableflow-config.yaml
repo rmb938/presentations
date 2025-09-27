@@ -13,7 +13,7 @@ tables:
     schema:
       fields:
         - { name: item_id, type: int, id: 1 }
-        - { name: timestamp, type: string, id: 2 }
+        - { name: timestamp, type: timestamp, id: 2 }
         - { name: name, type: string, id: 3 }
         - { name: icon, type: string, id: 4 }
         - { name: avgHighPrice, type: int, id: 5 }
