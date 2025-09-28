@@ -45,6 +45,7 @@ services:
       - gcp_service_account_key
   redis:
     image: docker.io/library/redis:8
+    restart: unless-stopped
     command:
       # Save a snapshot of the DB every 60 seconds if at least 1 write operation was performed
       - redis-server
