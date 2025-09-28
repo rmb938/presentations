@@ -149,7 +149,7 @@ output:
       - kafka_franz:
           seed_brokers:
             - warpstream-agent-kafka:9092
-          topic: osrs_prices_5m
+          topic: osrs_prices_5m # TODO: switch to osrs_prices_5m_historical
           key: ${! this.item_id }
           partitioner: murmur2_hash
           compression: zstd
@@ -164,6 +164,7 @@ output:
 cache_resources:
   - label: mapping_cache
     memory: {}
+  # TODO: switch to redis
   - label: timestamp_offset
     file:
       directory: /cache/timestamp_offset
