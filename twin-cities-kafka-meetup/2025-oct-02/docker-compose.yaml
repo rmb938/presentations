@@ -7,6 +7,8 @@ services:
     env_file: .env/warpstream-agent-kafka
     secrets:
       - gcp_service_account_key
+    ports:
+      - 9092:9092
   bento-historical:
     image: ghcr.io/warpstreamlabs/bento
     restart: unless-stopped
@@ -15,7 +17,11 @@ services:
       - debug
     volumes:
       - ./bento-historical.yaml:/bento.yaml
+      # TODO: remove this at some point and replace with redis cache
       - bento-historical-file-cache-timestamp_offset:/cache/timestamp_offset
+    depends_on:
+      redis:
+        condition: service_healthy
   bento-realtime:
     image: ghcr.io/warpstreamlabs/bento
     restart: unless-stopped
@@ -26,6 +32,9 @@ services:
       - trace
     volumes:
       - ./bento-realtime.yaml:/bento.yaml
+    depends_on:
+      redis:
+        condition: service_healthy
   warpstream-agent-tableflow:
     image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
     restart: unless-stopped
@@ -34,6 +43,25 @@ services:
     env_file: .env/warpstream-agent-tableflow
     secrets:
       - gcp_service_account_key
+  redis:
+    image: docker.io/library/redis:8
+    command:
+      # Save a snapshot of the DB every 60 seconds if at least 1 write operation was performed
+      - redis-server
+      - --save
+      - "60"
+      - "1"
+      - --loglevel warning
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - redis:/data
 
 secrets:
   gcp_service_account_key:
@@ -41,3 +69,4 @@ secrets:
 
 volumes:
   bento-historical-file-cache-timestamp_offset: {}
+  redis: {}

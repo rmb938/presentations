@@ -1,14 +1,42 @@
 input:
   generate:
-    interval: 5m
+    interval: 1s # Max 1s so API devs don't get mad
     batch_size: 1
-    auto_replay_nacks: false
-    count: 0
+    auto_replay_nacks: true
+    # Set the timestamp in the message, starting at 1615190400 (Monday, March 8, 2021 8:00:00 AM GMT) and add 300 seconds each time
+    count: 479378 # Maximum this many 5 min intervals since 1615190400, as of Sept 27th 2025
     mapping: |
       root = {}
 
 pipeline:
   processors:
+    # Load the current timestamp offset from cache
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          # Try to pull mapping from cache
+          - cache:
+              resource: timestamp_offset
+              key: timestamp_offset
+              operator: get
+          # Otherwise store it in the cache
+          - catch:
+              - mapping: |
+                  root = {}
+                  root.timestamp_offset = 0
+          - mapping: |
+              root = this
+              root.timestamp_offset = this.timestamp_offset + 300
+          - cache:
+              resource: timestamp_offset
+              key: timestamp_offset
+              operator: set
+              ttl: 1h
+              value: "${! content() }"
+
+        result_map: |
+          root.timestamp = 1615190400 + this.timestamp_offset
+
     - branch:
         request_map: 'root = ""'
         processors:
@@ -43,10 +71,7 @@ pipeline:
     - branch:
         processors:
           - http:
-              # Query 5m with timestamp
-              # Timestamp is rounded to nearest 5 minute interval then goes back in time by 10 mins so we have data.
-              # If we don't go back in time by 10 mins, we query the current 5 min interval which may not be populated at query time.
-              url: https://prices.runescape.wiki/api/v1/osrs/5m?timestamp=${! ((((timestamp_unix().number() / 300).round()) * 300) - 600) }
+              url: https://prices.runescape.wiki/api/v1/osrs/5m?timestamp=${! this.timestamp }
               verb: GET
               retries: 100
               headers:
@@ -55,7 +80,6 @@ pipeline:
               parallel: false
         result_map: |
           root.data = this.data
-          root.timestamp = this.timestamp
 
     # Copy the timestamp into all the data items
     - mapping: |
@@ -122,29 +146,15 @@ output:
   broker:
     pattern: fan_out
     outputs:
-      - kafka_franz:
-          seed_brokers:
-            - warpstream-agent-kafka:9092
-          topic: osrs_prices_5m
-          key: ${! this.item_id }
-          partitioner: murmur2_hash
-          compression: zstd
-
-          # Recommended WarpStream config
-          metadata_max_age: 60s
-          max_buffered_records: 1000000
-          max_message_bytes: 16000000
       - stdout:
           codec: lines
 
 cache_resources:
   - label: mapping_cache
     memory: {}
+  - label: timestamp_offset
+    memory: {}
   - label: last_item_low_price
-    redis:
-      url: redis://redis:6379
-      prefix: realtime_last_item_low_price
+    memory: {}
   - label: last_item_high_price
-    redis:
-      url: redis://redis:6379
-      prefix: realtime_last_item_high_price
+    memory: {}

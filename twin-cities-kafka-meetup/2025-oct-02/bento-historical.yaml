@@ -4,7 +4,7 @@ input:
     batch_size: 1
     auto_replay_nacks: true
     # Set the timestamp in the message, starting at 1615190400 (Monday, March 8, 2021 8:00:00 AM GMT) and add 300 seconds each time
-    count: 477307 # Maximum this many 5 min intervals since 1615190400, as of Sept 20th 2025
+    count: 479378 # Maximum this many 5 min intervals since 1615190400, as of Sept 27th 2025
     mapping: |
       root = {}
 
@@ -93,19 +93,49 @@ pipeline:
     - unarchive:
         format: json_map
 
-    # Remove avgHighPrice and highPriceVolume if volume is 0
-    # This means there was no insta buy during this time period
-    - mapping: |
-        root = this
-        root.avgHighPrice = if this.highPriceVolume == 0 { deleted() } else { this.avgHighPrice }
-        root.highPriceVolume = if this.highPriceVolume == 0 { deleted() } else { this.highPriceVolume }
+    # Populate avgHighPrice from cache if it's empty
+    - branch:
+        processors:
+          - cache:
+              resource: last_item_high_price
+              key: '${! json("item_id") }'
+              operator: get
+          - catch:
+              - mapping: |
+                  root = 0
+        result_map: |
+          if root.avgHighPrice == null {
+            root.avgHighPrice = this
+          }
 
-    # Remove avgLowPrice and lowPriceVolume if volume is 0
-    # This means there was no insta sell during this time period
-    - mapping: |
-        root = this
-        root.avgLowPrice = if this.lowPriceVolume == 0 { deleted() } else { this.avgLowPrice }
-        root.lowPriceVolume = if this.lowPriceVolume == 0 { deleted() } else { this.lowPriceVolume }
+    # Save avgHighPrice into the cache
+    - cache:
+        resource: last_item_high_price
+        key: '${! json("item_id") }'
+        operator: set
+        value: '${! json("avgHighPrice") }'
+
+    # Populate avgLowPrice from cache if it's empty
+    - branch:
+        processors:
+          - cache:
+              resource: last_item_low_price
+              key: '${! json("item_id") }'
+              operator: get
+          - catch:
+              - mapping: |
+                  root = 0
+        result_map: |
+          if root.avgLowPrice == null {
+            root.avgLowPrice = this
+          }
+
+    # Save avgLowPrice into the cache
+    - cache:
+        resource: last_item_low_price
+        key: '${! json("item_id") }'
+        operator: set
+        value: '${! json("avgLowPrice") }'
 
     # Convert unix time to timestamp
     - mapping: |
@@ -137,3 +167,11 @@ cache_resources:
   - label: timestamp_offset
     file:
       directory: /cache/timestamp_offset
+  - label: last_item_low_price
+    redis:
+      url: redis://redis:6379
+      prefix: historical_last_item_low_price
+  - label: last_item_high_price
+    redis:
+      url: redis://redis:6379
+      prefix: historical_last_item_high_price
