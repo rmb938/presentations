@@ -1,0 +1,29 @@
+# Read data from (historical or realtime not both) kafka topic
+# Drop everything that isn't part of an index
+# Add item instabuy price to cache, maybe also volume and other things
+# Replace root with a list of item ids from the index
+#   map of index name -> list of item ids
+#   map of index name -> divisor
+#     ideally we'll want to change the divisor over time
+#     but it's hard to do when laoding in the historical data
+#     for the realtime data we probably can do it
+#   map of item ids -> index name
+#   This is so when we get an item we can find the index it's for
+#   When replacing root with list of item ids make sure it's a clone
+#     root.index_list = list of item ids
+#     root.divisor = divisor
+#     root.timestamp = this.timestamp (timestamp from source message)
+#   Somehow do the following:
+#     loop through index list and lookup each item from a cache
+#     if item is missing delete()
+#     if all items are there add them together to root.price
+#     then do root.price = this.price/this.divisor
+#     publish message
+#
+# When graphing you'll want to do the average over a time range
+#   due to above ^ you'll probably get duplicate data for each time interval
+#   we'll probably want a way to stop that somehow
+#   maybe after publishing the message (processor in output), add the last seen timestamp
+#   to a cache and look that up right before publishing
+#   if last seen timestamp = timestamp in message
+#     then we probably can drop the message before publishing
