@@ -1,5 +1,9 @@
 # Read data from (historical or realtime not both) kafka topic
 # Drop everything that isn't part of an index
+#   probably move the data into their own "index topics" one for histoorical and one for real time
+#   that way we only need to keep a list of items in one spot and we can just have multiple bento instances
+#   reading from different topics and publishing to different output topics
+#
 # Add item instabuy price to cache, maybe also volume and other things
 # Replace root with a list of item ids from the index
 #   map of index name -> list of item ids
