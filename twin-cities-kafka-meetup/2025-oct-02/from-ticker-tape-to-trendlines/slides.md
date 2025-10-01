@@ -220,30 +220,51 @@ Spark and Compaction
 ---
 ---
 # Apache Iceberg
-Tableflow
+WarpStream Tableflow
 
-TODO: nice image with warpstream
+![](/images/iceberg_with_warpstream.png)
 
 ---
 layout: two-cols
 ---
-# Other BYOC Products
+# WarpStream Tableflow
+Any Kafka-compatible Source
 
-* Requires access to your VPC to deploy clusters.
+WarpStream Tableflow works with **any** Kafka-compatible source (**Open-Source Kafka**, 
+**MSK**, **Confluent Cloud**, **WarpStream**, etc), and can run in any cloud or even 
+on-premise. 
 
-* Requires expansive cross-IAM roles to manage the cluster remotely.
+<br />
 
-* Requires expensive and complex VPC peering.
+Ingest simultaneously from multiple different Kafka clusters to centralize your data in 
+a single lake.
 
- * Remote access is required for support, and elevated permissions can raise security issues. Break glass enables root access.
+<br />
+
+Kafka in and Apache Iceberg out means there is no vendor lock-in.
 
 ::right::
 
-# WarpStream's BYOC
+![](/images/ws_tableflow_any_kafka.svg)
 
-* Data / Metadata split enables WarpStream's control plane to function with no access to your VPC or object storage buckets.
-* Only metadata is transferred between your VPC and WarpStream's control plane.
-* It is impossible for WarpStream to access your data under any circumstances.
+---
+---
+# Fully Bring your Own Cloud
+Your VPC, Your Bucket, No Remote Access
+
+<!--TODO: push a link and qr code to security and privacy warpstream.com shortlink -->
+<!--TODO: https://docs.warpstream.com/warpstream/reference/security-and-privacy-considerations -->
+
+WarpStream has **zero** access to your data or your network
+
+WarpStream requires **no** remote access into your VPCs
+
+**Impossible** for WarpStream to access your data under any circumstances
+
+Your data stays in **your cloud**, **your vpc**, and **your bucket**
+
+WarpStream Control Plane only stores metadata like topic names, topic configs, partition 
+counts.
 
 ---
 layout: full
@@ -252,6 +273,7 @@ layout: full
 <img src="/images/warpstream_logo.svg" width="1000"/>
 
 ## [warpstream.com](https://www.warpstream.com/)
+## [warpstream.com/tableflow](https://www.warpstream.com/tableflow)
 
 <br />
 <br />
@@ -286,9 +308,9 @@ layout: full
 </style>
 
 <div class="image-container">
-  <img src="/images/qr-code-warpstream.svg" width="220"/>
-  TODO: QR code to tableflow docs
-  <img src="" width="220"/>
+  <img src="/images/qr-code-warpstream.svg" width="200"/>
+  TODO: QR code to tableflow
+  <img src="" width="200"/>
 </div>
 
 
@@ -378,23 +400,18 @@ generate:
     mapping: |
       root = {}
 ```
-```yaml {*|7}
-- branch:
-    processors:
-      - http:
-          # Query 5m with timestamp
-          # Timestamp is rounded to nearest 5 minute interval then goes back in time by 10 mins so we have data.
-          # If we don't go back in time by 10 mins, we query the current 5 min interval which may not be populated at query time.
-          url: https://example.com/api/v1/trades/5m?timestamp=${! ((((timestamp_unix().number() / 300).round()) * 300) - 600) }
-          verb: GET
-          retries: 100
-          headers:
-            # Custom User agent with discord username as recommended by API devs
-            User-Agent: WarpStream - Bento - @rmb938 in Discord
-          parallel: false
-    result_map: |
-      root.data = this.data
-      root.timestamp = this.timestamp
+```yaml {*|5}
+- http:
+    # Query 5m with timestamp
+    # Timestamp is rounded to nearest 5 minute interval then goes back in time by 10 mins so we have data.
+    # If we don't go back in time by 10 mins, we query the current 5 min interval which may not be populated at query time.
+    url: https://example.com/api/v1/trades/5m?timestamp=${! ((((timestamp_unix().number() / 300).round()) * 300) - 600) }
+    verb: GET
+    retries: 100
+    headers:
+      # Custom User agent with discord username as recommended by API devs
+      User-Agent: WarpStream - Bento - @rmb938 in Discord
+    parallel: false
 ```
 ````
 
@@ -440,25 +457,29 @@ tables:
 # Tableflow Deploy, Stats, & Partitions
 Kafka -> Tableflow, no Java, no complex systems
 
-```yaml
-warpstream-agent-tableflow:
-  image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
-  command:
-    - agent
-  env:
-    WARPSTREAM_DEFAULT_VIRTUAL_CLUSTER_ID: "vci_dl_foo"
-    WARPSTREAM_AGENT_KEY: "***********"
-  secrets:
-    - gcp_service_account_key
-```
+<v-switch>
+  <template #1>
 
-TODO: picture here of table flow throughput
+  ```yaml
+  warpstream-agent-tableflow:
+    image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
+    command:
+      - agent
+    env:
+      WARPSTREAM_DEFAULT_VIRTUAL_CLUSTER_ID: "vci_dl_foo"
+      WARPSTREAM_AGENT_KEY: "***********"
+    secrets:
+      - gcp_service_account_key
+  ```
 
-then another pic of parittion file picker
+  </template>
 
-then another pic of the partition stats
 
-picture of bucket stats in gcs
+  <template #2><img src="/images/Screenshot%202025-10-01%20at%204.39.28%20PM.png" alt="Image 1"></template>
+  <template #3><img src="/images/Screenshot%202025-10-01%20at%204.39.40%20PM.png" alt="Image 2"></template>
+  <template #4><img src="/images/Screenshot%202025-10-01%20at%204.39.47%20PM.png" alt="Image 3"></template>
+  <template #5><img src="/images/Screenshot_20251001_164114.png" alt="Image 4"></template>
+</v-switch>
 
 ---
 layout: center
@@ -496,7 +517,9 @@ Large organizations of "Day Traders" buying and selling items to make small amou
 # Grand Exchange Pricing Site
 Automated Pricing Site ran by the Wiki
 
-todo: picture of https://prices.runescape.wiki/osrs/
+Items with highest daily volume - https://prices.runescape.wiki/
+
+![](/images/Screenshot_20251001_171409.png)
 
 ---
 ---
@@ -543,41 +566,36 @@ layout: center
 ---
 # Volume
 
-stuff
+Amount of assets traded during a specific period
 
 ---
 layout: center
 ---
 # Basket of Goods
 
-stuff
+A fixed representative sample of goods and services that consumers buy
 
 <br />
 
 # CPI - Consumer Price Index
 
-stuff
+The average change in price of the items in the basket
+
+$\left(\frac{\text{Current Year Basket Cost}}{\text{Base Year Basket Cost}}\right) \times 100$
 
 ---
 layout: center
 ---
 # Inflation
+A sustained increase in the general price of goods and services in an economy, leading to a decline in the purchasing power of money
 
-stuff
+$\left(\frac{\text{Current Year CPI}-\text{Previous Year CPI}}{\text{CPI Previous Year}}\right) \times 100$
 
 ---
 layout: center
 ---
 # Market Index
-
-stuff
-
----
-layout: center
----
-# Market Manipulation
-
-stuff
+A group of assets that track the performance of a specific market segment
 
 ---
 ---
@@ -586,28 +604,64 @@ We need a query engine for Iceberg
 
 https://clickhouse.com/cloud
 
-All our data is in Object Store so we are just paying for compute
+All our data is in GCP Object Storage so we are just paying for compute
 
+````md magic-move
 ```sql
-table creation here
+CREATE TABLE 
+  osrs_prices_5m 
+  ENGINE=IcebergS3(
+    'https://storage.googleapis.com/rmb-lab-twin_cities_kafka_meetup_2025_oct_02/warpstream/_tableflow/warpstream+osrs_prices_5m-1d3f32f1-dc10-4fc1-a6f1-a8b136e15582', 
+    's3api access key', 
+    's3api secret key'
+  )
 ```
 
 ```sql
-select * from table limiting now
+SELECT 
+    item_id,
+    name,
+    avg(avgHighPrice),
+    sum(highPriceVolume) as highPriceVolume,
+    avg(avgLowPrice),
+    sum(lowPriceVolume)
+FROM 
+  osrs_prices_5m
+WHERE 
+  warpstream.timestamp >= subtractHours(now(), 1) and warpstream.timestamp <= now()
+GROUP BY 
+  item_id, name
+ORDER BY 
+  highPriceVolume desc
 ```
-
-nice picture of table of data
+````
 
 ---
+---
+# Clickhouse
+We need a query engine for Iceberg
+
+![](/images/Screenshot_20251001_174058.png)
+
+---
+layout: two-cols
 ---
 # Grafana
 Tables are nice but I want time series
 
+Using Grafana Cloud
+
 https://grafana.com/products/cloud/
+
+<br />
+
+There's an official ClickHouse Data Source Plugin
 
 https://grafana.com/grafana/plugins/grafana-clickhouse-datasource/
 
-picture of datasource setup
+::right::
+
+![](/images/Screenshot_20251001_174207.png)
 
 ---
 ---
@@ -634,6 +688,9 @@ talk about using bento to compute cpi, inflation and indexes in the stream prooc
 talk about wanting to add game updates, player events, ect.. to the data to see
 what happens during interesting moments
 
+figure out a cheap way to provide this data and queries to the players
+clickhouse is pretty cheap for compute but it is still expensive to allow random queries from the player base
+  - pre cache queries for example
 
 ---
 layout: end
@@ -642,7 +699,7 @@ layout: end
 # Thanks You!
 Q & A
 
-Slides Available at 
+Slides, Bento, & Tableflow Configs Available at 
 
 https://github.com/rmb938/presentations
 
