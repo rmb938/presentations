@@ -49,7 +49,7 @@ Ordered my first Ubuntu liveCD soon after and forever got stuck in vim
 
 Previously helped run the infrastructure automation for a few popular Minecraft servers
 
-Deployed the largest deployment of baremetal K8s in the mid-west, probably the US for a few months in early 2019.
+Deployed the largest deployment of baremetal K8s in the mid-west, probably the US, for a few months in early 2019.
 
 <br />
 
@@ -601,6 +601,13 @@ layout: center
 ![](/images/Old_School_RuneScape_logo.png)
 
 ---
+layout: center
+---
+# Why not use real stock market data?
+The APIs are expensive and the free ones have limits on the number of requests per day
+
+
+---
 layout: two-cols
 ---
 # RuneScape really has a giant economy
@@ -771,32 +778,260 @@ https://grafana.com/grafana/plugins/grafana-clickhouse-datasource/
 
 ---
 ---
-# Graphs picking specific items
+# Looking at Specific Items
+<p />
+
+<v-switch>
+  <template #1>
+    <h3>Toadflax</h3>
+    <img src="/images/Screenshot_20251002_125415.png" alt="Image 1">
+  </template>
+  <template #2>
+    <h3>Sunfire Splinters</h3>
+    <img src="/images/Screenshot_20251002_125801.png" alt="Image 2">
+  </template>
+
+  <template #3>
+
+  ### Low and High Price Change
+
+  ```sql
+  SELECT
+    (
+        last_value(avgLowPrice) OVER (ORDER BY warpstream.timestamp ASC)
+        - first_value(avgLowPrice) OVER (ORDER BY warpstream.timestamp ASC)
+    ) AS lowPriceChange,
+    (
+        last_value(avgHighPrice) OVER (ORDER BY warpstream.timestamp ASC)
+        - first_value(avgHighPrice) OVER (ORDER BY warpstream.timestamp ASC)
+    ) AS highPriceChange
+  FROM osrs_prices_5m 
+  where 
+      item_id = ${item_id} and $__timeFilter(warpstream.timestamp)
+  ORDER by warpstream.timestamp DESC
+  limit 1
+  ```
+
+  </template #3>
+
+  <template #4>
+
+  ### Item Volume
+
+  ```sql
+  SELECT $__timeInterval(warpstream.timestamp) as time,
+      avg(lowPriceVolume) as averageInstaSellVolume,
+      avg(highPriceVolume) as averageInstaBuyVolume
+  FROM osrs_prices_5m 
+  where 
+      item_id = ${item_id} and $__timeFilter(warpstream.timestamp)
+  group by 
+      item_id, time
+  order by time ASC
+  LIMIT 10000
+  ```
+
+  </template #4>
+
+  <template #5>
+
+  ### Item Price
+
+  ```sql
+  SELECT $__timeInterval(warpstream.timestamp) as time,
+      avg(avgLowPrice) as averageInstaSellPrice, 
+      avg(avgHighPrice) as averageInstaBuyPrice 
+  FROM osrs_prices_5m 
+  where 
+      item_id = ${item_id} and $__timeFilter(warpstream.timestamp)
+  group by 
+      item_id, time
+  order by time ASC
+  LIMIT 10000
+  ```
+
+  </template #5>
+</v-switch>
 
 ---
 ---
 # Graphs of CPI and Inflation
+Querying this was hard
+
+<v-switch>
+  <template #1><img src="/images/Screenshot_20251002_131148.png" alt="Image 1"></template>
+  <template #2><img src="/images/Screenshot_20251002_131226.png" alt="Image 2"></template>
+</v-switch>
+
+---
+---
+# Graphs of CPI and Inflation
+Querying this was hard
+
+````md magic-move
+```sql
+SELECT
+  name,
+  avg(avgHighPrice) AS baseAverageHighPrice
+FROM osrs_prices_5m 
+WHERE 
+  item_id IN (${basketOfGoods})
+  AND avgHighPrice > 0
+  AND warpstream.timestamp >= toDateTime(1614556800) AND warpstream.timestamp < toDateTime(1617235199)
+GROUP BY
+  name
+ORDER BY
+  baseAverageHighPrice DESC
+```
+```sql
+select
+    sum(baseAverageHighPrice)
+FROM
+    (SELECT 
+    item_id,
+    avg(avgHighPrice) as baseAverageHighPrice
+    FROM osrs_prices_5m 
+    WHERE 
+    item_id IN (${basketOfGoods})
+    AND avgHighPrice > 0
+    AND warpstream.timestamp >= toDateTime(1614556800) AND warpstream.timestamp < toDateTime(1617235199)
+    GROUP BY
+    item_id
+    )
+```
+```sql
+SELECT 
+  time,
+  ((sum(avgHighPrice1)/${basketOfGoodsTotalBase})*100) as CPI
+FROM
+  (SELECT
+    $__timeInterval(warpstream.timestamp) as time,
+    name,
+    avg(avgHighPrice) as avgHighPrice1
+  FROM osrs_prices_5m 
+  WHERE 
+    item_id IN (${basketOfGoods})
+    AND avgHighPrice > 0
+    AND $__timeFilter(warpstream.timestamp)
+  GROUP BY
+    name, time
+  LIMIT 100000
+  )
+group by time
+order by time asc
+```
+```sql
+SELECT 
+  time,
+  (((sum(avgHighPrice1)/${basketOfGoodsTotalBase})*100)-100) as InflationPercent
+FROM
+  (SELECT
+    $__timeInterval(warpstream.timestamp) as time,
+    name,
+    avg(avgHighPrice) as avgHighPrice1
+  FROM osrs_prices_5m 
+  WHERE 
+    item_id IN (${basketOfGoods})
+    AND avgHighPrice > 0
+    AND $__timeFilter(warpstream.timestamp)
+  GROUP BY
+    name, time
+  LIMIT 100000
+  )
+group by time
+order by time asc
+```
+````
 
 ---
 ---
 # Graphs of Indexes
+<p />
+
+![](/images/Screenshot_20251002_131942.png)
+![](/images/Screenshot_20251002_132045.png)
+
+---
+---
+# Index Queries
+<p />
+
+````md magic-move
+```sql
+SELECT
+    time,
+    sum(averageInstaBuyPrice)/${herbIndexDivisor} as index
+FROM
+    (SELECT $__timeInterval(warpstream.timestamp) as time,
+        name,
+        avg(avgHighPrice) as averageInstaBuyPrice
+    FROM osrs_prices_5m 
+    where 
+        item_id IN [${herbIndexItems}]
+        and $__timeFilter(warpstream.timestamp)
+    group by 
+        name, time
+    order by time ASC
+    LIMIT 100000)
+group by time
+```
+```sql
+SELECT $__timeInterval(warpstream.timestamp) as time,
+    name,
+    avg(avgHighPrice) as averageInstaBuyPrice
+FROM osrs_prices_5m 
+where 
+    item_id IN [${herbIndexItems}]
+    and $__timeFilter(warpstream.timestamp)
+group by 
+    name, time
+order by time ASC
+LIMIT 100000
+```
+```sql
+SELECT
+  name,
+  first_value(averageInstaBuyPrice) as Last,
+  min(averageInstaBuyPrice) as Min,
+  max(averageInstaBuyPrice) as Max,
+  avg(averageInstaBuyPrice) as Mean,
+  first_value(avgHighPriceVolume) as Volume
+FROM
+  (SELECT $__timeInterval(warpstream.timestamp) as time,
+      name,
+      avg(avgHighPrice) as averageInstaBuyPrice,
+      avg(highPriceVolume) as avgHighPriceVolume
+  FROM osrs_prices_5m 
+  where 
+      item_id IN [${herbIndexItems}]
+      and warpstream.timestamp >= toDateTime(subtractHours(now(), 3)) AND warpstream.timestamp <= toDateTime(now())
+  group by 
+      name, time
+  order by time DESC
+  LIMIT 100000)
+group by name
+```
+````
 
 ---
 ---
 # Learnings and What's Next
+Graphing Data is hard
 
-talk about loading data is slow
+Source API has a low rate limit, ~1 request per second so loading data takes a long time.
 
-talk about accidently putting historical and realtime in the same topic
+Mixed output topic meant performing useful stream processing on the data in Kafka was difficult.
 
-talk about using bento to compute cpi, inflation and indexes in the stream proocessor
+Compute CI, Inflation, and Indexes using Bento itself to allow for simpler and more performant queries.
 
-talk about wanting to add game updates, player events, ect.. to the data to see
-what happens during interesting moments
+Some queries take over a minute to run, figure out better partitioning and use `EXPLAIN` to see if anything can be improved
 
-figure out a cheap way to provide this data and queries to the players
-clickhouse is pretty cheap for compute but it is still expensive to allow random queries from the player base
-  - pre cache queries for example
+Modify Bento Pipeline to account for missing data for items.
+
+Add game updates and player events to the graphs using Grafana Annotations to see how
+changes in prices correlates with changes to the game.
+
+Data as a Service, figure out a cheap way to provide this data and queries to players.
 
 ---
 layout: end
