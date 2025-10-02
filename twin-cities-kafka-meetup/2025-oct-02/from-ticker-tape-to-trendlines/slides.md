@@ -277,7 +277,6 @@ layout: full
 
 <br />
 <br />
-<br />
 
 <style>
 .image-container {
@@ -309,8 +308,7 @@ layout: full
 
 <div class="image-container">
   <img src="/images/qr-code-warpstream.svg" width="200"/>
-  TODO: QR code to tableflow
-  <img src="" width="200"/>
+  <img src="/images/qr-code-warpstream-tableflow.svg" width="200"/>
 </div>
 
 
@@ -417,7 +415,115 @@ generate:
 
 ---
 ---
-# Loading All the Data
+# Full Bento Config
+Yes it's just that simple
+
+```yaml {*|1-8|15-28|30-45|47-72}{maxHeight:'400px'}
+input:
+  generate:
+    interval: 5m
+    batch_size: 1
+    auto_replay_nacks: false
+    count: 0
+    mapping: |
+      root = {}
+
+pipeline:
+  processors:
+    # Make the http call on 5m endpoint, using branch so we don't overwrite root and clear the root.item_mapping
+    - branch:
+        processors:
+          - http:
+              # Query 5m with timestamp
+              # Timestamp is rounded to nearest 5 minute interval then goes back in time by 10 mins so we have data.
+              # If we don't go back in time by 10 mins, we query the current 5 min interval which may not be populated at query time.
+              url: https://prices.runescape.wiki/api/v1/osrs/5m?timestamp=${! ((((timestamp_unix().number() / 300).round()) * 300) - 600) }
+              verb: GET
+              retries: 100
+              headers:
+                # Custom User agent with discord username as recommended by API devs
+                User-Agent: WarpStream - Bento - @rmb938 in Discord
+              parallel: false
+        result_map: |
+          root.data = this.data
+          root.timestamp = this.timestamp
+
+    # Copy the timestamp into all the data items
+    - mapping: |
+        root.data = this.data.map_each(item -> item.value.merge({"id": item.key.number(), "timestamp": this.timestamp}))
+
+    # Move all the data items into the root
+    - mapping: |
+        root = this.data
+
+    # Split the dict into their own messages
+    - unarchive:
+        format: json_map
+
+    # Convert unix time to timestamp
+    - mapping: |
+        root = this
+        root.timestamp = this.timestamp.ts_format("2006-01-02T15:04:05Z07:00", "UTC")
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - kafka_franz:
+          seed_brokers:
+            - warpstream-agent-kafka:9092
+          topic: prices_5m
+          key: ${! this.item_id }
+          partitioner: murmur2_hash
+          compression: zstd
+
+          # Recommended WarpStream config
+          metadata_max_age: 60s
+          max_buffered_records: 1000000
+          max_message_bytes: 16000000
+      - stdout:
+          codec: lines
+```
+
+---
+---
+# Deploying with Docker Compose
+
+```yaml {*|1-11|12-19|19-29}{maxHeight:'400px'}
+services:
+  warpstream-agent-kafka:
+    image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
+    restart: unless-stopped
+    command:
+      - agent
+    env_file: .env/warpstream-agent-kafka
+    secrets:
+      - gcp_service_account_key
+    ports:
+      - 9092:9092
+  bento-historical:
+    image: ghcr.io/warpstreamlabs/bento
+    restart: unless-stopped
+    command:
+      - --log.level
+      - debug
+    volumes:
+      - ./bento-historical.yaml:/bento.yaml
+  bento-realtime:
+    image: ghcr.io/warpstreamlabs/bento
+    restart: unless-stopped
+    command:
+      - --log.level
+      # Trace because this one does way less stuff so we want to make sure it's
+      # still working
+      - trace
+    volumes:
+      - ./bento-realtime.yaml:/bento.yaml
+```
+
+---
+---
+# Loading All the Data into a Kafka Topic
 Lots of Records
 
 ![](/images/Screenshot_20250930_193810.png)
@@ -425,7 +531,7 @@ Lots of Records
 ---
 ---
 # Tableflow Configuration
-Like Bento it's YAML
+Like Bento it's YAML and Simple
 
 ```yaml {*|4-5|6|8-9|10|12|13-22}
 source_clusters:
