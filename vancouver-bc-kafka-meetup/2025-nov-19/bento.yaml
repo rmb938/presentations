@@ -84,7 +84,7 @@ pipeline:
                   resource: item_mapping
                   key: osrs_item_mapping
                   operator: set
-                  ttl: 1h
+                  ttl: 1h # Using 1h here cause mapping data could change when new items are added
                   value: "${! content() }"
         result_map: |
           root.item_mapping = this
@@ -213,7 +213,6 @@ pipeline:
         resource: item_price
         key: '${! json("id") }'
         operator: set
-        ttl: 1h
         value: "${! content() }"
 
 output:
