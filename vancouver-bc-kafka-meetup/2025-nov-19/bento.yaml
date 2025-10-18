@@ -1,0 +1,62 @@
+input:
+  generate:
+    interval: 1s
+    batch_size: 1
+    auto_replay_nacks: true
+    count: 1
+    mapping: |
+      root = {}
+
+pipeline:
+  processors:
+    # Load the current timestamp offset from cache
+    - branch:
+        request_map: 'root = ""'
+        processors:
+          # Try to pull mapping from cache
+          - cache:
+              resource: timestamp_offset
+              key: timestamp_offset
+              operator: get
+          # Otherwise store it in the cache
+          - catch:
+              - mapping: |
+                  root = {}
+                  root.timestamp_offset = 0
+          - mapping: |
+              root = this
+              root.timestamp_offset = this.timestamp_offset + 300
+          - cache:
+              resource: timestamp_offset
+              key: timestamp_offset
+              operator: set
+              ttl: 1h
+              value: "${! content() }"
+
+        result_map: |
+          root.timestamp = 1615190400 + this.timestamp_offset
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      # - kafka_franz:
+      #     seed_brokers:
+      #       - warpstream-agent-kafka:9092
+      #     topic: osrs_prices_5m
+      #     key: ${! this.item_id }
+      #     partitioner: murmur2_hash
+      #     compression: zstd
+
+      #     # Recommended WarpStream config
+      #     metadata_max_age: 60s
+      #     max_buffered_records: 1000000
+      #     max_message_bytes: 16000000
+      - stdout:
+          codec: lines
+
+cache_resources:
+  - label: timestamp_offset
+    redis:
+      url: redis://redis:6379
+      prefix: timestamp_offset
