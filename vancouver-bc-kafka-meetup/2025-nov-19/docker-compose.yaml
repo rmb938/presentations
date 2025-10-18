@@ -1,33 +1,33 @@
 services:
-  warpstream-agent-kafka:
-    image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
-    restart: unless-stopped
-    command:
-      - agent
-    env_file: .env/warpstream-agent-kafka
-    secrets:
-      - gcp_service_account_key
-    ports:
-      - 9092:9092
-  bento:
-    image: ghcr.io/warpstreamlabs/bento
-    restart: unless-stopped
-    command:
-      - --log.level
-      - debug
-    volumes:
-      - ./bento.yaml:/bento.yaml
-    depends_on:
-      redis:
-        condition: service_healthy
-  warpstream-agent-tableflow:
-    image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
-    restart: unless-stopped
-    command:
-      - agent
-    env_file: .env/warpstream-agent-tableflow
-    secrets:
-      - gcp_service_account_key
+  # warpstream-agent-kafka:
+  #   image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
+  #   restart: unless-stopped
+  #   command:
+  #     - agent
+  #   env_file: .env/warpstream-agent-kafka
+  #   secrets:
+  #     - gcp_service_account_key
+  #   ports:
+  #     - 9092:9092
+  # bento:
+  #   image: ghcr.io/warpstreamlabs/bento
+  #   restart: unless-stopped
+  #   command:
+  #     - --log.level
+  #     - debug
+  #   volumes:
+  #     - ./bento.yaml:/bento.yaml
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  # warpstream-agent-tableflow:
+  #   image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
+  #   restart: unless-stopped
+  #   command:
+  #     - agent
+  #   env_file: .env/warpstream-agent-tableflow
+  #   secrets:
+  #     - gcp_service_account_key
   redis:
     image: docker.io/library/redis:8
     restart: unless-stopped

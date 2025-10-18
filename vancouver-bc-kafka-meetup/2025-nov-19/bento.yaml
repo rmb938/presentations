@@ -3,38 +3,208 @@ input:
     interval: 1s
     batch_size: 1
     auto_replay_nacks: true
-    count: 1
+    count: 0
     mapping: |
       root = {}
 
 pipeline:
   processors:
     # Load the current timestamp offset from cache
+    # Try to pull timestamp from cache
+    - cache:
+        resource: timestamp_offset
+        key: timestamp_offset
+        operator: get
+
+    # Otherwise set it to 0
+    - catch:
+        - mapping: |
+            root = {}
+            root.timestamp_offset = 0
+
+    # Increment the offset
+    - mapping: |
+        root = this
+        root.timestamp_offset = this.timestamp_offset + 300
+
+    # Set the timestamp from the offset
+    - mapping: |
+        root = this
+
+        # Offset from Monday, March 8, 2021 8:00:00 AM
+        root.timestamp = 1615190400 + this.timestamp_offset
+
+    # If timestamp > (now minus 10 minutes) delete the messages
+    # We will retry the same offset over and over until the message isn't deleted
+    - mapping: |
+        root = this
+
+        # Round to the nearest 5 minute interval and subtract 10 minutes
+        let cuttoff_ts = ((((timestamp_unix().number() / 300).round()) * 300) - 600)
+
+        if root.timestamp > $cuttoff_ts {
+          root = deleted()
+        }
+
+    # Finally save the content to the cache so we save the timestamp offset
+    - cache:
+        resource: timestamp_offset
+        key: timestamp_offset
+        operator: set
+        value: "${! content() }"
+
+    # Remove timestamp offset
+    - mapping: |
+        root = this
+        root.timestamp_offset = deleted()
+
+    # Query for the item mapping
     - branch:
         request_map: 'root = ""'
         processors:
           # Try to pull mapping from cache
           - cache:
-              resource: timestamp_offset
-              key: timestamp_offset
+              resource: item_mapping
+              key: osrs_item_mapping
               operator: get
           # Otherwise store it in the cache
           - catch:
+              - http:
+                  url: https://prices.runescape.wiki/api/v1/osrs/mapping
+                  verb: GET
+                  retries: 100
+                  headers:
+                    # Custom User agent with discord username as recommended by API devs
+                    User-Agent: WarpStream - Bento - @rmb938 in Discord
+              - mapping: |
+                  root = this.map_each(item -> {
+                    (item.id.string()): item
+                  }).squash()
+              - cache:
+                  resource: item_mapping
+                  key: osrs_item_mapping
+                  operator: set
+                  ttl: 1h
+                  value: "${! content() }"
+        result_map: |
+          root.item_mapping = this
+
+    # Make the http call on 5m endpoint, using branch so we don't overwrite root and clear the root.item_mapping
+    - branch:
+        processors:
+          - http:
+              # Query 5m with timestamp
+              # Timestamp is rounded to nearest 5 minute interval then goes back in time by 10 mins so we have data.
+              # If we don't go back in time by 10 mins, we query the current 5 min interval which may not be populated at query time.
+              url: https://prices.runescape.wiki/api/v1/osrs/5m?timestamp=${! this.timestamp }
+              verb: GET
+              retries: 100
+              headers:
+                # Custom User agent with discord username as recommended by API devs
+                User-Agent: WarpStream - Bento - @rmb938 in Discord
+              parallel: false
+        result_map: |
+          root.data = this.data
+
+    # Copy pricing data and timestamp into the mapping bits
+    - mapping: |
+        root = {}
+        root.data = this.item_mapping.map_each(item -> item.value.merge({"timestamp": this.timestamp, "avgHighPrice": this.data.get(item.key).avgHighPrice, "avgLowPrice": this.data.get(item.key).avgLowPrice, "highPriceVolume": this.data.get(item.key).highPriceVolume, "lowPriceVolume": this.data.get(item.key).lowPriceVolume}))
+
+    # Move all the data items into the root
+    - mapping: |
+        root = this.data
+
+    # Split the dict into their own messages
+    - unarchive:
+        format: json_map
+
+    # Fill in volume nulls, if null it means there was no low or high trades in this 5m window
+    - mapping: |
+        root = this
+
+        if root.lowPriceVolume == null {
+          root.lowPriceVolume = 0
+        }
+
+        if root.highPriceVolume == null {
+          root.highPriceVolume = 0
+        }
+
+    ### Start avgLowPrice fixing
+
+    # If avgLowPrice is null try and find last price from cache
+    - branch:
+        request_map: |
+          root = {}
+          root.id = id
+          if this.avgLowPrice != null {
+            root = deleted()
+          }
+        processors:
+          - cache:
+              resource: item_price
+              key: '${! json("id") }'
+              operator: get
+          # If not in cache set avgLowPrice to null
+          - catch:
               - mapping: |
                   root = {}
-                  root.timestamp_offset = 0
-          - mapping: |
-              root = this
-              root.timestamp_offset = this.timestamp_offset + 300
-          - cache:
-              resource: timestamp_offset
-              key: timestamp_offset
-              operator: set
-              ttl: 1h
-              value: "${! content() }"
-
+                  root.avgLowPrice = null
         result_map: |
-          root.timestamp = 1615190400 + this.timestamp_offset
+          root.avgLowPrice = this.avgLowPrice
+
+    # If avgLowPrice is still null delete it.
+    # This means we haven't seen a low trade for this item yet
+    - mapping: |
+        root = this
+
+        if root.avgLowPrice == null {
+          root = deleted()
+        }
+
+    ### End avgLowPrice fixing
+    ### Start avgHighPrice fixing
+
+    # If avgHighPrice is null try and find last price from cache
+    - branch:
+        request_map: |
+          root = {}
+          root.id = id
+          if this.avgHighPrice != null {
+            root = deleted()
+          }
+        processors:
+          - cache:
+              resource: item_price
+              key: '${! json("id") }'
+              operator: get
+          # If not in cache set avgHighPrice to null
+          - catch:
+              - mapping: |
+                  root = {}
+                  root.avgHighPrice = null
+        result_map: |
+          root.avgHighPrice = this.avgHighPrice
+
+    # If avgHighPrice is still null delete it.
+    # This means we haven't seen a high trade for this item yet
+    - mapping: |
+        root = this
+
+        if root.avgHighPrice == null {
+          root = deleted()
+        }
+
+    ### End avgHighPrice fixing
+
+    # Cache each item info
+    - cache:
+        resource: item_price
+        key: '${! json("id") }'
+        operator: set
+        ttl: 1h
+        value: "${! content() }"
 
 output:
   broker:
@@ -44,7 +214,7 @@ output:
       #     seed_brokers:
       #       - warpstream-agent-kafka:9092
       #     topic: osrs_prices_5m
-      #     key: ${! this.item_id }
+      #     key: ${! this.id }
       #     partitioner: murmur2_hash
       #     compression: zstd
 
@@ -58,5 +228,13 @@ output:
 cache_resources:
   - label: timestamp_offset
     redis:
-      url: redis://redis:6379
+      url: redis://${REDIS_HOST:127.0.0.1}:6379
       prefix: timestamp_offset
+  - label: item_mapping
+    redis:
+      url: redis://${REDIS_HOST:127.0.0.1}:6379
+      prefix: item_mapping
+  - label: item_price
+    redis:
+      url: redis://${REDIS_HOST:127.0.0.1}:6379
+      prefix: item_price
