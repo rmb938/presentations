@@ -106,6 +106,16 @@ pipeline:
         result_map: |
           root.data = this.data
 
+    # If there's no data for the 5m period, delete
+    # This could be when prices api or osrs is down
+    # No point processing data when it's down since all volume will be 0
+    # Better to just have missing data points probably
+    - mapping: |
+        root = this
+        if root.data.keys().length() == 0 {
+          root = deleted()
+        }
+
     # Copy pricing data and timestamp into the mapping bits
     - mapping: |
         root = {}
