@@ -1,0 +1,22 @@
+source_clusters:
+  - name: "warpstream"
+    bootstrap_brokers:
+      - hostname: "warpstream-agent-kafka"
+        port: 9092
+destination_bucket_url: "gs://rmb-lab-vancouver_kafka_meetup_2025_nov_19"
+tables:
+  - source_cluster_name: "warpstream"
+    source_topic: "osrs_prices_5m"
+    source_format: "json"
+    schema_mode: "inline"
+    partitioning_scheme: "hour"
+    schema:
+      fields:
+        - { name: id, type: int, id: 1 }
+        - { name: timestamp, type: timestamp, id: 2 }
+        - { name: name, type: string, id: 3 }
+        - { name: icon, type: string, id: 4 }
+        - { name: avgHighPrice, type: int, id: 5 }
+        - { name: highPriceVolume, type: int, id: 6 }
+        - { name: avgLowPrice, type: int, id: 7 }
+        - { name: lowPriceVolume, type: int, id: 8 }

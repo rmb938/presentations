@@ -219,18 +219,18 @@ output:
   broker:
     pattern: fan_out
     outputs:
-      # - kafka_franz:
-      #     seed_brokers:
-      #       - warpstream-agent-kafka:9092
-      #     topic: osrs_prices_5m
-      #     key: ${! this.id }
-      #     partitioner: murmur2_hash
-      #     compression: zstd
+      - kafka_franz:
+          seed_brokers:
+            - warpstream-agent-kafka:9092
+          topic: osrs_prices_5m
+          key: ${! this.id }
+          partitioner: murmur2_hash
+          compression: zstd
 
-      #     # Recommended WarpStream config
-      #     metadata_max_age: 60s
-      #     max_buffered_records: 1000000
-      #     max_message_bytes: 16000000
+          # Recommended WarpStream config
+          metadata_max_age: 60s
+          max_buffered_records: 1000000
+          max_message_bytes: 16000000
       - stdout:
           codec: lines
 
