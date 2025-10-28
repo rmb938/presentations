@@ -12,6 +12,9 @@ services:
   bento:
     image: ghcr.io/warpstreamlabs/bento
     restart: unless-stopped
+    command:
+      - --log.level
+      - info
     volumes:
       - ./bento.yaml:/bento.yaml
     environment:

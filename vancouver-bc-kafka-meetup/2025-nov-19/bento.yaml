@@ -236,8 +236,8 @@ output:
           metadata_max_age: 60s
           max_buffered_records: 1000000
           max_message_bytes: 16000000
-      - stdout:
-          codec: lines
+      #- stdout:
+      #    codec: lines
 
 cache_resources:
   - label: timestamp_offset
