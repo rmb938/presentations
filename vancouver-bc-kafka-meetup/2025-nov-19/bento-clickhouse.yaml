@@ -1,0 +1,57 @@
+# Common config fields, showing default values
+input:
+  kafka_franz:
+    seed_brokers:
+      - warpstream-agent-kafka:9092
+      # - localhost:9092
+    # client_id: "bento,ws_host_override=localhost"
+    topics:
+      - osrs_prices_5m
+    consumer_group: bento_clickhouse
+    auto_replay_nacks: true
+    auto_offset_reset: earliest
+
+    # Recommended WarpStream config
+    metadata_max_age: 60s
+    fetch_max_bytes: 40MiB
+    fetch_max_partition_bytes: 40MiB
+    fetch_max_wait: "10s"
+    batching:
+      count: 10000
+      period: 15s
+
+pipeline: {}
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      # - stdout:
+      #     codec: lines
+      - sql_insert:
+          driver: clickhouse
+          dsn: ${CLICKHOUSE_DSN}
+          init_verify_conn: true
+          table: osrs_prices_5m
+          columns:
+            [
+              id,
+              timestamp,
+              name,
+              icon,
+              avgHighPrice,
+              highPriceVolume,
+              avgLowPrice,
+              lowPriceVolume,
+            ]
+          args_mapping: |
+            root = [
+              this.id.uint16(),
+              this.timestamp.ts_format("2006-01-02 15:04:05"),
+              this.name,
+              this.icon,
+              this.avgHighPrice.uint64(),
+              this.highPriceVolume.uint64(),
+              this.avgLowPrice.uint64(),
+              this.lowPriceVolume.uint64()
+            ]

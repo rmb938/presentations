@@ -22,6 +22,19 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+  bento-clickhouse:
+    # Building custom image because sql_insert is bugged and only does a read only lock
+    # image: ghcr.io/warpstreamlabs/bento
+    build:
+      context: ./bento
+      dockerfile: resources/docker/Dockerfile.cgo
+    restart: unless-stopped
+    command:
+      - --log.level
+      - debug
+    env_file: .env/bento-clickhouse
+    volumes:
+      - ./bento-clickhouse.yaml:/bento.yaml
   warpstream-agent-tableflow:
     image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
     restart: unless-stopped
