@@ -1,9 +1,10 @@
+CREATE TABLE osrs_items_metadata
+ENGINE=URL('https://prices.runescape.wiki/api/v1/osrs/mapping', JSON);
+
 CREATE TABLE osrs_prices_5m
 (
     id UInt16,
     timestamp DateTime('UTC'),
-    name LowCardinality(String),
-    icon String,
     avgHighPrice UInt64,
     highPriceVolume UInt64,
     avgLowPrice UInt64,

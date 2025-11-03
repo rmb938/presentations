@@ -37,8 +37,6 @@ output:
             [
               id,
               timestamp,
-              name,
-              icon,
               avgHighPrice,
               highPriceVolume,
               avgLowPrice,
@@ -48,8 +46,6 @@ output:
             root = [
               this.id.uint16(),
               this.timestamp.ts_format("2006-01-02 15:04:05"),
-              this.name,
-              this.icon,
               this.avgHighPrice.uint64(),
               this.highPriceVolume.uint64(),
               this.avgLowPrice.uint64(),
