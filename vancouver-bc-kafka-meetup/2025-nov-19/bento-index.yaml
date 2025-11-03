@@ -1,0 +1,92 @@
+# Common config fields, showing default values
+input:
+  kafka_franz:
+    seed_brokers:
+      # - warpstream-agent-kafka:9092
+      - localhost:9092
+    client_id: "bento,ws_host_override=localhost"
+    topics:
+      - osrs_prices_5m
+    consumer_group: bento_index
+    auto_replay_nacks: true
+    auto_offset_reset: earliest
+
+    # Recommended WarpStream config
+    metadata_max_age: 60s
+    fetch_max_bytes: 40MiB
+    fetch_max_partition_bytes: 40MiB
+    fetch_max_wait: "10s"
+    batching:
+      count: 10000
+      period: 15s
+
+pipeline:
+  processors:
+    # Herb Index
+    - mapping: |
+        root = this
+
+        # Monday, March 8, 2021 8:00:00 AM
+        let start_time = 1615190400
+
+        let message_time = this.timestamp.ts_unix()
+        let message_offset = $message_time - $start_time
+
+        # Lists are offsets after start_time
+        let herb_index_items = {
+          # Start
+          0.string(): [249, 251, 253, 255, 257, 2998, 259, 261, 263, 3000, 265, 2481, 267, 269],
+
+          # Huasca released September 25 2024
+          # Offset is Monday, September 30, 2024 12:00:00 AM
+          (1727654400 - $start_time).string(): [30097, 249, 251, 253, 255, 257, 2998, 259, 261, 263, 3000, 265, 2481, 267, 269],
+        }
+
+        # List of divisors, offsets don't need to line up with items map
+        # These change whenever a new item is added or prices drastically change
+        let herb_index_divisor = {
+          # Start
+          0.string(): 20,
+
+          # Huasca released September 25 2024
+          # Offset is Monday, September 30, 2024 12:00:00 AM
+          (1727654400 - $start_time).string(): 28,
+        }
+
+        # Collect all the offsets and lists into a list
+        # Filter for offsets that are <= message offset
+        # Sort by increasing offset
+        # Get the last one
+        let matching_item_list = $herb_index_items.keys().map_each(key -> {
+            "offset": key.number(),
+            "indices": $herb_index_items.get(key)
+        }).filter(item -> item.offset <= $message_offset).sort_by(ele -> ele.offset).index(-1).get("indices")
+
+        if $matching_item_list.contains(this.id) {
+          root.index_name = "herb"
+
+          # Collect all the offsets and divisors into a list
+          # Filter for offsets that are <= message offset
+          # Sort by increasing offset
+          # Get the last one
+          let divisor = $herb_index_divisor.keys().map_each(key -> {
+              "offset": key.number(),
+              "divisor": $herb_index_divisor.get(key).number()
+          }).filter(item -> item.offset <= $message_offset).sort_by(ele -> ele.offset).index(-1).get("divisor")
+
+          root.divisor = $divisor
+        }
+
+    # Remove any items that never got assigned to an index
+    - mapping: |
+        root = this
+        if root.index_name == null {
+          root = deleted()
+        }
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - stdout:
+          codec: lines
