@@ -1,11 +1,11 @@
 CREATE TABLE osrs_index_5m
 (
-    index_name String,
+    index_name LowCardinality(String),
     divisor UInt64,
 
     id UInt16,
     timestamp DateTime('UTC'),
-    name String,
+    name LowCardinality(String),
     icon String,
     avgHighPrice UInt64,
     highPriceVolume UInt64,
