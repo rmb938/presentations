@@ -35,14 +35,14 @@ services:
     env_file: .env/bento-clickhouse
     volumes:
       - ./bento-clickhouse.yaml:/bento.yaml
-  warpstream-agent-tableflow:
-    image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
-    restart: unless-stopped
-    command:
-      - agent
-    env_file: .env/warpstream-agent-tableflow
-    secrets:
-      - gcp_service_account_key
+  # warpstream-agent-tableflow:
+  #   image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
+  #   restart: unless-stopped
+  #   command:
+  #     - agent
+  #   env_file: .env/warpstream-agent-tableflow
+  #   secrets:
+  #     - gcp_service_account_key
   redis:
     image: docker.io/library/redis:8
     restart: unless-stopped
