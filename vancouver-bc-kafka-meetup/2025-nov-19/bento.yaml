@@ -1,6 +1,6 @@
 input:
   generate:
-    interval: 1s
+    interval: 250ms
     batch_size: 1
     auto_replay_nacks: true
     count: 0

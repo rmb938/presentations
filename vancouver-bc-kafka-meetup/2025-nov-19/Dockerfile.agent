@@ -1,0 +1,9 @@
+FROM smallstep/step-ca as CA
+
+RUN step ca root /tmp/smallstep-homelab-prod.crt --ca-url https://step-ca.us-homelab1.hl.rmb938.me --fingerprint 111301fb085dfc83f5390c0be68df3d68f5584853df0cb4c442383c33f2bd83a
+
+FROM public.ecr.aws/warpstream-labs/warpstream_agent:latest
+
+COPY --from=CA /tmp/smallstep-homelab-prod.crt /usr/local/share/ca-certificates/smallstep-homelab-prod.crt
+
+RUN cat /usr/local/share/ca-certificates/smallstep-homelab-prod.crt >> /etc/ssl/certs/ca-certificates.crt

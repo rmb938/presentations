@@ -1,12 +1,15 @@
 services:
   warpstream-agent-kafka:
-    image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
+    # Normally this image, but I'm using local object storage with a custom CA
+    # So we are building our own image with the CA included
+    # image: public.ecr.aws/warpstream-labs/warpstream_agent:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
     restart: unless-stopped
     command:
       - agent
     env_file: .env/warpstream-agent-kafka
-    secrets:
-      - gcp_service_account_key
     ports:
       - 9092:9092
   bento:
@@ -22,19 +25,19 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-  bento-clickhouse:
-    # Building custom image because sql_insert is bugged and only does a read only lock
-    # image: ghcr.io/warpstreamlabs/bento
-    build:
-      context: ./bento
-      dockerfile: resources/docker/Dockerfile.cgo
-    restart: unless-stopped
-    command:
-      - --log.level
-      - debug
-    env_file: .env/bento-clickhouse
-    volumes:
-      - ./bento-clickhouse.yaml:/bento.yaml
+  # bento-clickhouse:
+  #   # Building custom image because sql_insert is bugged and only does a read only lock
+  #   # image: ghcr.io/warpstreamlabs/bento
+  #   build:
+  #     context: ./bento
+  #     dockerfile: resources/docker/Dockerfile.cgo
+  #   restart: unless-stopped
+  #   command:
+  #     - --log.level
+  #     - debug
+  #   env_file: .env/bento-clickhouse
+  #   volumes:
+  #     - ./bento-clickhouse.yaml:/bento.yaml
   # warpstream-agent-tableflow:
   #   image: public.ecr.aws/warpstream-labs/warpstream_agent:unstable-timestampfrommessagevalue
   #   restart: unless-stopped
@@ -63,10 +66,6 @@ services:
       start_period: 10s
     volumes:
       - redis:/data
-
-secrets:
-  gcp_service_account_key:
-    file: .secrets/rmb-lab-cdc3ab9f96b6.json
 
 volumes:
   redis: {}
