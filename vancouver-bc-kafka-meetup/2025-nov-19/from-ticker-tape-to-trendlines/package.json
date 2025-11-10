@@ -1,0 +1,20 @@
+{
+  "name": "from-ticker-tape-to-trendlines",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "slidev build",
+    "dev": "slidev --open",
+    "export": "slidev export"
+  },
+  "dependencies": {
+    "@iconify-json/logos": "^1.2.9",
+    "@slidev/cli": "^52.8.0",
+    "@slidev/theme-default": "latest",
+    "@slidev/theme-seriph": "latest",
+    "vue": "^3.5.24"
+  },
+  "devDependencies": {
+    "playwright-chromium": "^1.56.1"
+  }
+}
