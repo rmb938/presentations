@@ -46,6 +46,10 @@ pipeline:
           root = deleted()
         }
 
+    # TODO: compare the root.timestamp to a raw call to https://prices.runescape.wiki/api/v1/osrs/5m
+    #   if root.timestamp > raw.timestamp delete root
+    #   this means the api hasn't scraped up to our root.timestamp yet and we should try again later
+
     # Finally save the content to the cache so we save the timestamp offset
     - cache:
         resource: timestamp_offset
