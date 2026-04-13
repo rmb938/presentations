@@ -1,0 +1,17 @@
+{
+  "name": "embedding-a-stream-processor-inside-your-go-application",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "slidev build",
+    "dev": "slidev --open",
+    "export": "slidev export"
+  },
+  "dependencies": {
+    "@iconify-json/logos": "^1.2.11",
+    "@slidev/cli": "^52.14.2",
+    "@slidev/theme-default": "latest",
+    "@slidev/theme-seriph": "latest",
+    "vue": "^3.5.29"
+  }
+}
