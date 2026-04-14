@@ -749,11 +749,97 @@ You don't need WarpStream to build something similar
 # Using WarpStream Managed Data Pipelines
 It's free with no extra cost when using WarpStream for Kafka
 
-pictures in the ui showing pipeline creation
+![](</images/Screenshot 2026-04-14 at 3.00.51 PM.png>)
 
-pictures showing topic output in the ui
+---
+---
+# Using WarpStream Managed Data Pipelines
+It's free with no extra cost when using WarpStream for Kafka
 
-pictures showing kafka consuming from topic for pipeline output
+![](</images/Screenshot 2026-04-14 at 3.00.58 PM.png>)
+
+---
+---
+# Using WarpStream Managed Data Pipelines
+It's free with no extra cost when using WarpStream for Kafka
+
+![](</images/Screenshot 2026-04-14 at 3.01.14 PM.png>)
+
+---
+---
+# Using WarpStream Managed Data Pipelines
+It's free with no extra cost when using WarpStream for Kafka
+
+![](</images/Screenshot 2026-04-14 at 3.01.23 PM.png>)
+
+---
+---
+# Using WarpStream Managed Data Pipelines
+It's free with no extra cost when using WarpStream for Kafka
+
+![](</images/Screenshot 2026-04-14 at 3.01.39 PM.png>)
+
+---
+---
+# Using WarpStream Managed Data Pipelines
+It's free with no extra cost when using WarpStream for Kafka
+
+![](</images/Screenshot 2026-04-14 at 3.01.47 PM.png>)
+
+---
+---
+# Using WarpStream Managed Data Pipelines
+It's free with no extra cost when using WarpStream for Kafka
+
+![](</images/Screenshot 2026-04-14 at 3.01.57 PM.png>)
+
+---
+---
+# Using WarpStream Managed Data Pipelines
+It's free with no extra cost when using WarpStream for Kafka
+
+![](</images/Screenshot 2026-04-14 at 3.02.09 PM.png>)
+
+---
+---
+# WarpStream Managed Data Pipelines Helpers
+Connecting to WarpStream and Parallelism Management
+
+````md magic-move
+```yaml
+input:
+    kafka_franz:
+        seed_brokers: ["localhost:9092"]
+        topics: ["test_topic"]
+
+    processors:
+        - mapping: "root = content().capitalize()"
+
+output:
+    kafka_franz:
+        seed_brokers: ["localhost:9092"]
+        topic: "test_topic_capitalized"
+```
+```yaml
+input:
+    kafka_franz_warpstream:
+        topics: ["test_topic"]
+
+    processors:
+        - mapping: "root = content().capitalize()"
+
+output:
+    kafka_franz_warpstream:
+        topic: "test_topic_capitalized"
+```
+```yaml
+warpstream:
+  scheduling:
+    run_every: 1s
+  cluster_concurrency_target: 1
+  pipeline_group: my-agent-group
+```
+````
 
 ---
 ---
@@ -819,6 +905,28 @@ input_schema: |
       "field2": { "type": "string" }
     }
   }
+```
+```go
+func ParseDataLakeBentoTransform(transform string) (*bloblang.Executor, error) {
+	if err := ValidateDataLakeBentoTransform(transform); err != nil {
+		return nil, err
+	}
+
+	return bloblang.NewEnvironment().OnlyPure().Parse(transform)
+}
+
+....
+
+for i, executor := range bentoExecutors {
+  var bentoAny = any(structured)
+  err := executor.Overlay(structured, &bentoAny)
+  if err != nil {
+    e := fmt.Errorf("failed to apply bento transform at index %d: %w", i, err)
+    return e
+  }
+
+  ...
+}
 ```
 ````
 
