@@ -747,6 +747,101 @@ You don't need WarpStream to build something similar
 
 ---
 ---
+# Putting it all Together Yourself
+You don't need WarpStream to build something similar
+
+``` {*|1-2|7-8|10-12|41-43|60-65}{maxHeight:'400px'}
+2026/04/14 16:00:03 starting pipeline: heartbeats
+2026/04/14 16:00:03 started pipeline: heartbeats
+INFO Output type stdout is now active              @service=bento label="" path=root.output
+INFO Input type generate is now active             @service=bento label="" path=root.input
+{"pipeline":"heartbeats","status":"ok"}
+{"pipeline":"heartbeats","status":"ok"}
+2026/04/14 16:00:13 stopping pipeline: heartbeats
+2026/04/14 16:00:13 stopped pipeline: heartbeats
+{"pipeline":"heartbeats","status":"ok"}
+2026/04/14 16:00:13 starting pipeline: user-events
+2026/04/14 16:00:13 started pipeline: user-events
+2026/04/14 16:00:13 starting pipeline: metrics
+INFO Input type generate is now active             @service=bento label="" path=root.input
+INFO Output type stdout is now active              @service=bento label="" path=root.output
+{"event":"purchase","pipeline":"user-events","user_id":506}
+2026/04/14 16:00:13 started pipeline: metrics
+2026/04/14 16:00:13 starting pipeline: logs
+INFO Input type generate is now active             @service=bento label="" path=root.input
+INFO Output type stdout is now active              @service=bento label="" path=root.output
+{"cpu_percent":59,"disk_percent":59,"memory_mb":2898,"pipeline":"metrics"}
+2026/04/14 16:00:13 started pipeline: logs
+INFO Input type generate is now active             @service=bento label="" path=root.input
+INFO Output type stdout is now active              @service=bento label="" path=root.output
+{"level":"WARN","message":"application log entry","pipeline":"logs","service":"worker"}
+{"level":"ERROR","message":"application log entry","pipeline":"logs","service":"api"}
+{"event":"login","pipeline":"user-events","user_id":153}
+{"cpu_percent":55,"disk_percent":55,"memory_mb":5161,"pipeline":"metrics"}
+{"level":"INFO","message":"application log entry","pipeline":"logs","service":"worker"}
+{"event":"purchase","pipeline":"user-events","user_id":828}
+{"level":"INFO","message":"application log entry","pipeline":"logs","service":"api"}
+{"pipeline":"heartbeats","status":"ok"}
+{"event":"logout","pipeline":"user-events","user_id":795}
+{"cpu_percent":63,"disk_percent":63,"memory_mb":11994,"pipeline":"metrics"}
+{"level":"INFO","message":"application log entry","pipeline":"logs","service":"api"}
+{"level":"INFO","message":"application log entry","pipeline":"logs","service":"worker"}
+{"event":"login","pipeline":"user-events","user_id":203}
+{"cpu_percent":28,"disk_percent":28,"memory_mb":7292,"pipeline":"metrics"}
+{"level":"INFO","message":"application log entry","pipeline":"logs","service":"worker"}
+2026/04/14 16:00:23 stopping pipeline: user-events
+{"pipeline":"heartbeats","status":"ok"}
+2026/04/14 16:00:23 stopped pipeline: user-events
+2026/04/14 16:00:23 stopping pipeline: logs
+2026/04/14 16:00:23 stopped pipeline: logs
+{"event":"login","pipeline":"user-events","user_id":64}
+{"level":"ERROR","message":"application log entry","pipeline":"logs","service":"api"}
+{"event":"login","pipeline":"user-events","user_id":154}
+{"cpu_percent":15,"disk_percent":15,"memory_mb":15191,"pipeline":"metrics"}
+{"level":"WARN","message":"application log entry","pipeline":"logs","service":"worker"}
+{"level":"INFO","message":"application log entry","pipeline":"logs","service":"api"}
+{"event":"login","pipeline":"user-events","user_id":457}
+{"pipeline":"heartbeats","status":"ok"}
+{"cpu_percent":23,"disk_percent":23,"memory_mb":13005,"pipeline":"metrics"}
+{"level":"ERROR","message":"application log entry","pipeline":"logs","service":"api"}
+{"event":"login","pipeline":"user-events","user_id":930}
+{"level":"ERROR","message":"application log entry","pipeline":"logs","service":"api"}
+{"event":"login","pipeline":"user-events","user_id":647}
+{"cpu_percent":46,"disk_percent":46,"memory_mb":7890,"pipeline":"metrics"}
+{"level":"WARN","message":"application log entry","pipeline":"logs","service":"worker"}
+{"level":"INFO","message":"application log entry","pipeline":"logs","service":"api"}
+2026/04/14 16:00:33 stopping pipeline: metrics
+2026/04/14 16:00:33 stopped pipeline: metrics
+{"pipeline":"heartbeats","status":"ok"}
+2026/04/14 16:00:33 starting pipeline: orders
+2026/04/14 16:00:33 started pipeline: orders
+2026/04/14 16:00:33 starting pipeline: heartbeats
+INFO Input type generate is now active             @service=bento label="" path=root.input
+INFO Output type stdout is now active              @service=bento label="" path=root.output
+```
+
+---
+---
+# How WarpStream does it
+Jobs, Reconciling, and Desired State
+
+WarpStream's Control Plane and agents use a job system and reconciling to distribute tasks and desired state 
+throughout the cluster
+
+These jobs started as data compaction jobs to make the storage in S3 more efficient overtime
+
+Eventually these jobs also evolved to include scheduling tasks for Orbit for kafka migrations
+
+Now our Managed Data Pipelines and Tableflow products use this same system to make sure pipelines are properly running
+and configured
+
+These jobs can be one-off tasks like "compact this data" or desired state like "Agent A should be running pipeline foo".
+
+The reconciling logic is similar to Kubernetes operators were there are controlers and handlers that get called based off 
+changes in the system.
+
+---
+---
 # Using WarpStream Managed Data Pipelines
 It's free with no extra cost when using WarpStream for Kafka
 
