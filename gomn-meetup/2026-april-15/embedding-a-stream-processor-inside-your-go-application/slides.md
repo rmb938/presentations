@@ -208,6 +208,7 @@ output:
 ---
 ---
 # Bento Custom Plugins
+Faker Example
 
 ```go {*|18-24|26-46|50-58|70-72|74-93|93-102|105-107}{maxHeight:'400px'}
 package plugins
@@ -320,6 +321,226 @@ func (f *fakerInput) Close(ctx context.Context) error {
 ```
 
 ---
+---
+# Bento Custom Plugins
+Something more real
+
+```go {*|28-37|21-26|46-48|71-83|104-120|131-134}{maxHeight:'400px'}
+package github_events_archive
+
+import (
+	"compress/gzip"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/google/go-github/v72/github"
+	"github.com/warpstreamlabs/bento/public/service"
+)
+
+func inputSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().Fields(service.NewAutoRetryNacksToggleField())
+}
+
+func newInput(conf *service.ParsedConfig) (service.BatchInput, error) {
+	return service.AutoRetryNacksBatchedToggled(conf, &githubArchiveInput{
+		// TODO: hard coded for now
+		nextArchiveTime: time.Now().Add(-1 * 7 * 24 * time.Hour).UTC(),
+	})
+}
+
+func init() {
+	err := service.RegisterBatchInput("github_events_archive", inputSpec(),
+		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
+			return newInput(pConf)
+		})
+	if err != nil {
+		panic(err)
+	}
+
+}
+
+type githubArchiveInput struct {
+	nextArchiveTime time.Time
+
+	trackedBatchesLock sync.Mutex
+	trackedBatches     []string
+}
+
+func (i *githubArchiveInput) Connect(ctx context.Context) error {
+	return nil
+}
+
+func (i *githubArchiveInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	for {
+		i.trackedBatchesLock.Lock()
+		if len(i.trackedBatches) == 0 {
+			i.trackedBatchesLock.Unlock()
+			break
+		}
+		fmt.Println("There is back preasure, waiting...")
+		i.trackedBatchesLock.Unlock()
+		time.Sleep(5 * time.Second)
+	}
+
+	fmt.Println("No backpreasure starting")
+
+	i.trackedBatchesLock.Lock()
+	defer i.trackedBatchesLock.Unlock()
+
+	fmt.Println("Got the lock")
+
+	batch := make(service.MessageBatch, 0)
+
+	archiveURL := fmt.Sprintf("https://data.gharchive.org/%s-%d.json.gz", i.nextArchiveTime.Format("2006-01-02"), i.nextArchiveTime.Hour())
+	fmt.Printf("Downloading archive from %s\n", archiveURL)
+	resp, err := http.Get(archiveURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error making http request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		// archive not found, so sleep 1 min
+		time.Sleep(1 * time.Minute)
+		return batch, func(context.Context, error) error { return nil }, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error reading body during error: %w", err)
+		}
+		return nil, nil, fmt.Errorf("error response from server (status code %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	gzipReader, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating gzip reader: %w", err)
+	}
+	defer gzipReader.Close()
+
+	jsonDecoder := json.NewDecoder(gzipReader)
+
+	var startID *string
+	var endID string
+
+	for {
+		var event github.Event
+		if err := jsonDecoder.Decode(&event); err != nil {
+			if err == io.EOF {
+				break // End of stream
+			}
+
+			return nil, nil, fmt.Errorf("error decoding json object: %w", err)
+		}
+
+		jsonData, err := json.Marshal(event)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error json marshaling github event %d: %w", event.ID, err)
+		}
+
+		msg := service.NewMessage(jsonData)
+		batch = append(batch, msg)
+
+		if startID == nil {
+			startID = event.ID
+		}
+
+		endID = *event.ID
+
+		i.trackedBatches = append(i.trackedBatches, *event.ID)
+	}
+
+	i.nextArchiveTime = i.nextArchiveTime.Add(1 * time.Hour)
+
+	fmt.Printf("Sending batch with size %d Start ID: %s End ID: %s\n", len(batch), *startID, endID)
+	return batch, func(ctx context.Context, err error) error {
+		fmt.Printf("starting ack func: %v\n", err)
+
+		i.trackedBatchesLock.Lock()
+		defer i.trackedBatchesLock.Unlock()
+
+		i.trackedBatches = i.trackedBatches[:0]
+
+		fmt.Println("finished ack func")
+		return nil
+	}, nil
+}
+
+func (i *githubArchiveInput) Close(ctx context.Context) error {
+	return nil
+}
+```
+
+---
+---
+# Import and run bneto with the plugin
+Just a simple main.go
+
+```go
+package main
+
+import (
+	"context"
+
+	// import all components with:
+	_ "github.com/warpstreamlabs/bento/public/components/all"
+
+	"github.com/warpstreamlabs/bento/public/service"
+	// import your plugins:
+
+	_ "github.com/rmb938/.../github_events_archive"
+)
+
+func main() {
+	// RunCLI accepts a number of optional functions:
+	// https://pkg.go.dev/github.com/warpstreamlabs/bento/public/service#CLIOptFunc
+	service.RunCLI(context.Background())
+}
+```
+
+---
+layout: two-cols
+---
+# Running Bento
+As simple as a `go run`
+
+```bash {*|1|6|9-10}
+$ go run main.go -c bento-config-gh.yaml 
+INFO Running main config from specified file       @service=bento bento_version=v1.7.1 path=bento-config-gh.yaml
+INFO Listening for HTTP requests at: http://0.0.0.0:4195  @service=bento
+INFO Launching a Bento instance, use CTRL+C to close  @service=bento
+INFO Output type kafka_franz is now active         @service=bento label="" path=root.output
+INFO Input type github_events_archive is now active  @service=bento label="" path=root.input
+No backpreasure starting
+Got the lock
+Downloading archive from https://data.gharchive.org/2025-05-14-20.json.gz
+Sending batch with size 233916 Start ID: 49730103801 End ID: 49732035425
+```
+
+::right::
+
+# Configuration
+Simple, Boring, Configuration
+
+```yaml  {*|2|5-9}
+input:
+  github_events_archive: {}
+
+output:
+  kafka_franz:
+    seed_brokers:
+      - localhost:9092
+    topic: github_events
+    partitioner: uniform_bytes
+```
+
+---
 layout: quote
 ---
 # <logos-kafka-icon /> Kafka
@@ -361,7 +582,7 @@ ETL and stream processing from within your WarpStream Agents and cloud account.
 
 No additional infrastructure needed. 
 
-You own the data pipeline – end to end. 
+You own the data pipeline end to end. 
 
 Raw data never leaves your account.
 
@@ -494,32 +715,6 @@ stream.Run(ctx)
 ```
 
 ---
-layout: two-cols
----
-# How to automate and distribute configuration updates
-WarpStream Control Plane
-
-The WarpStream Control Plane holds all information about what pipelines exist and what agents they should run on
-
-Agents periodically poll the control plane for any changes to the pipeline
-
-Agents restart their processing by rebuilding the Bento Stream
-
-::right::
-
-```go
-// Poll current pipelines from control plane
-
-// Compare current pipelines to running pipelines
-
-// If different cancel context so pipeline stops
-
-// set a new yaml on the builder
-
-// re-build and re-run the stream
-```
-
----
 ---
 # Keeping things Secure
 Limiting access to the filesystem, environment, and other system resources
@@ -531,10 +726,15 @@ This is all built into Bento so if you want to do this yourself it's simple
 env.UseFS(service.NewFS(&fakeFS{}))
 
 // Create a custom importer to prevent importing of custom code outside of the pipeline environment
-blobEnv.WithCustomImporter(...)
+blobEnv = blobEnv.WithCustomImporter(func(_ string) ([]byte, error) {
+  return []byte("map fake {}"), nil
+})
 
-// Prevent free-range Env var lookups to prevent secret and configuration leaks
-builder.SetEnvVarLookupFunc(...)
+// Prevent access to environment variables
+builder.SetEnvVarLookupFunc(func(_ string) (string, bool) {
+  // TODO: Allow environment variables matching certain patterns
+  return "", false
+})
 ```
 
 ---
@@ -542,19 +742,7 @@ builder.SetEnvVarLookupFunc(...)
 # Putting it all Together Yourself
 You don't need WarpStream to build something similar
 
-```go
-// here's a fully working golang file
-
-// polling a pipeline from the filesystem, blob storage, rest api, ect..
-
-// compairing current pipelines to running
-
-// restarting pipelnies for changes if needed
-
-// protecting the system from prying eyes
-```
-
-and show it working, i.e console logs
+<<< @/snippets/code/main.go go {*|181-202|202-214|216-235|137-157|159-178}{maxHeight:'400px'}
 
 ---
 ---
@@ -566,3 +754,115 @@ pictures in the ui showing pipeline creation
 pictures showing topic output in the ui
 
 pictures showing kafka consuming from topic for pipeline output
+
+---
+---
+# WarpStream Tableflow uses Bento Internally
+bloblang for table transforms
+
+````md magic-move
+```json
+{
+    "schema": {...},
+    "payload": {
+    	"op": "u",
+    	"source": {
+    		...
+    	},
+    	"ts_ms" : "...",
+    	"ts_us" : "...",
+    	"ts_ns" : "...",
+    	"before" : {
+    		"field1" : "oldvalue1",
+    		"field2" : "oldvalue2"
+    	},
+    	"after" : {
+    		"field1" : "newvalue1",
+    		"field2" : "newvalue2"
+    	}
+	}
+}
+```
+```yaml
+source_format: json
+input_schema: |
+  {
+    "type": "object",
+    "properties": {
+      "payload": {
+        "type": "object",
+        "properties": {
+          "after": {
+            "type": "object",
+            "properties": {
+              "field1": { "type": "string" },
+              "field2": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+```
+```yaml {*|8-14|3-6}
+source_format: json
+transforms:
+  - transform_type: bento
+    transform: |
+      root.field1 = this.payload.after.field1
+      root.field2 = this.payload.after.field2
+input_schema: |
+  {
+    "type": "object",
+    "properties": {
+      "field1": { "type": "string" },
+      "field2": { "type": "string" }
+    }
+  }
+```
+````
+
+---
+layout: end
+---
+
+# Thanks You!
+Q & A
+
+Slides, Bento Configs, Plugin Code, Bento Pipeline Automation Available at 
+
+https://github.com/rmb938/presentations
+
+OR
+
+<style>
+.image-container {
+  /* Enables Flexbox layout for direct children */
+  display: flex;
+
+  /* Centers the images horizontally within the container (optional) */
+  justify-content: center;
+
+  /* Adds some space around the images (optional) */
+  gap: 300px;
+
+  /* Sets a maximum width for the container (optional) */
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.image-container img {
+  /* Makes the images take up equal space */
+  /* flex: 1; */
+
+  /* Ensures the images don't exceed the container's width */
+  max-width: 100%;
+
+  /* Ensures images maintain their aspect ratio */
+  height: auto;
+}
+</style>
+
+<div class="image-container">
+  <img src="/images/qr-code-slides.svg" width="220"/>
+</div>
