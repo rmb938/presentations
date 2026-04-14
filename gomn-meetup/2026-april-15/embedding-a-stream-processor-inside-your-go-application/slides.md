@@ -47,8 +47,9 @@ Deployed the largest deployment of baremetal K8s in the mid-west, probably the U
 
 <br />
 
-<carbon-logo-github /> [rmb938](https://github.com/rmb938)
-<carbon-logo-linkedin /> [rbelgrave](https://www.linkedin.com/in/rbelgrave/)
+<carbon-logo-github /> <a href="https://github.com/rmb938" style="color: #6b7280">rmb938</a>
+<carbon-logo-linkedin /> <a href="https://www.linkedin.com/in/rbelgrave/" style="color: #6b7280">rbelgrave</a>
+<circle-flags-lgbt-progress /> <span style="color: #6b7280">they/them</span>
 
 ---
 ---
